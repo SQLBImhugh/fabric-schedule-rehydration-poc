@@ -10,6 +10,46 @@ A local proof of concept that uses **GitHub as the control plane** to:
 
 ---
 
+## Quick start (automated replication)
+
+Replicate the whole POC in your own tenant in a few commands. Requires **PowerShell 7+**,
+**Azure CLI** (`az login`), **GitHub CLI** (`gh auth login`), a **Fabric capacity**, and a Fabric
+admin to enable one tenant setting.
+
+1. **Fork or clone this repo** and `cd` into it.
+
+2. **Enable the tenant setting** (Fabric admin portal → *Tenant settings → Developer settings*):
+   **"Service principals can call Fabric public APIs"** → Enabled (optionally scoped to a security
+   group that contains your service principal).
+
+3. **Create a service principal** for GitHub Actions and capture its IDs/secret:
+   ```powershell
+   $app = az ad app create --display-name "fabric-schedule-poc-sp" | ConvertFrom-Json
+   az ad sp create --id $app.appId | Out-Null
+   $cred = az ad app credential reset --id $app.appId --display-name github-actions --years 1 | ConvertFrom-Json
+   $spObjectId = az ad sp show --id $app.appId --query id -o tsv
+   "FABRIC_CLIENT_ID  = $($app.appId)";  "FABRIC_CLIENT_SECRET = $($cred.password)";  "SP object id = $spObjectId"
+   ```
+
+4. **Provision the Fabric objects** (workspaces, data pipeline, deployment pipeline + stages, initial
+   deploy) and write a local `.env`:
+   ```powershell
+   ./scripts/Setup-FabricPocEnvironment.ps1 -CapacityName "<your-capacity>" -ServicePrincipalObjectId $spObjectId
+   ```
+   Then add the service principal's `FABRIC_CLIENT_ID` and `FABRIC_CLIENT_SECRET` (from step 3) to `.env`.
+
+5. **Push secrets + create environments** on your GitHub repo:
+   ```powershell
+   ./scripts/Set-GitHubSecrets.ps1 -Repo "<owner>/<repo>"
+   ```
+
+6. **Run it** — Actions → *Fabric Deployment Pipeline Promotion* → Run workflow → `test`, then `prod`
+   (or `gh workflow run fabric-deploy.yml -f target_environment=test`).
+
+The numbered sections below explain each piece in detail and how to do it manually.
+
+---
+
 ## 1. What problem this POC demonstrates
 
 Many teams promote Fabric Data Factory pipelines through DEV → TEST → PROD using Fabric Deployment
@@ -178,14 +218,17 @@ Demonstration sequence:
 ## Repository layout
 
 ```text
-.github/workflows/fabric-deploy.yml   GitHub Actions promotion + rehydration workflow
-config/fabric-schedules.json          GitHub-owned schedule policy (source of truth)
-scripts/Get-FabricToken.ps1           Service-principal token acquisition
-scripts/Invoke-FabricApi.ps1          Shared REST helpers (retry + long-running operations)
-scripts/Deploy-FabricStage.ps1        Deploy Stage Content (promotion)
-scripts/Set-FabricItemSchedules.ps1   Post-deploy schedule rehydration (delete + recreate)
-scripts/Show-FabricItemSchedules.ps1  Demo helper to print current schedules
-.env.example                          Local testing variable template (copy to .env)
+.github/workflows/fabric-deploy.yml     GitHub Actions promotion + rehydration workflow
+config/fabric-schedules.json            GitHub-owned schedule policy (source of truth)
+scripts/Get-FabricToken.ps1             Service-principal token acquisition
+scripts/Invoke-FabricApi.ps1            Shared REST helpers (retry + long-running operations)
+scripts/Deploy-FabricStage.ps1          Deploy Stage Content (promotion)
+scripts/Set-FabricItemSchedules.ps1     Post-deploy schedule rehydration (delete + recreate)
+scripts/Show-FabricItemSchedules.ps1    Demo helper to print current schedules
+scripts/Setup-FabricPocEnvironment.ps1  One-command provisioning + ID/.env emit (replication)
+scripts/Set-GitHubSecrets.ps1           Push secrets + create environments from .env via gh
+.env.example                            Local testing variable template (copy to .env)
+LICENSE                                 MIT license
 ```
 
 ## Reference documentation
