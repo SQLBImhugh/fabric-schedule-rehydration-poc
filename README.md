@@ -172,9 +172,6 @@ Demonstration sequence:
 - Does **not** auto-create the workspaces or the Deployment Pipeline at run time (they are provisioned once).
 - Assumes item IDs are known and recorded in `config/fabric-schedules.json`.
 - **Authoritative mode**: any schedule present in Fabric but not declared in config is deleted.
-- Uses client-secret auth for simplicity; production should use GitHub OIDC / workload identity federation.
-- Service principal support can depend on the Fabric item types in the deployment.
-- No Teams/email notifications, dry-run, or schedule diff (see "Future enhancements" in the requirements).
 
 ---
 
