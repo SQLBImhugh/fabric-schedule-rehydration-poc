@@ -1,0 +1,79 @@
+name: Fabric Deployment Pipeline Promotion
+
+# Manually triggered promotion of the Schedule Rehydration POC.
+#   target_environment = test  ->  promote DEV  -> TEST,  then rehydrate TEST schedules
+#   target_environment = prod  ->  promote TEST -> PROD,  then rehydrate PROD schedules
+on:
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: "Target environment to deploy"
+        required: true
+        type: choice
+        options:
+          - test
+          - prod
+      deploy_note:
+        description: "Deployment note"
+        required: false
+        default: "GitHub Actions deployment"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.target_environment }}
+    runs-on: windows-latest
+    # Maps to a GitHub Environment (test / prod) so you can attach approval gates.
+    environment: ${{ inputs.target_environment }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Resolve source and target stage
+        id: stages
+        shell: pwsh
+        run: |
+          if ("${{ inputs.target_environment }}" -eq "test") {
+            "SOURCE_STAGE_ID=${{ secrets.FABRIC_DEV_STAGE_ID }}"  >> $env:GITHUB_OUTPUT
+            "TARGET_STAGE_ID=${{ secrets.FABRIC_TEST_STAGE_ID }}" >> $env:GITHUB_OUTPUT
+          }
+          elseif ("${{ inputs.target_environment }}" -eq "prod") {
+            "SOURCE_STAGE_ID=${{ secrets.FABRIC_TEST_STAGE_ID }}" >> $env:GITHUB_OUTPUT
+            "TARGET_STAGE_ID=${{ secrets.FABRIC_PROD_STAGE_ID }}" >> $env:GITHUB_OUTPUT
+          }
+          else {
+            throw "Unsupported target_environment: ${{ inputs.target_environment }}"
+          }
+
+      - name: Deploy Fabric stage (promote content)
+        shell: pwsh
+        run: |
+          ./scripts/Deploy-FabricStage.ps1 `
+            -TenantId "${{ secrets.FABRIC_TENANT_ID }}" `
+            -ClientId "${{ secrets.FABRIC_CLIENT_ID }}" `
+            -ClientSecret "${{ secrets.FABRIC_CLIENT_SECRET }}" `
+            -DeploymentPipelineId "${{ secrets.FABRIC_DEPLOYMENT_PIPELINE_ID }}" `
+            -SourceStageId "${{ steps.stages.outputs.SOURCE_STAGE_ID }}" `
+            -TargetStageId "${{ steps.stages.outputs.TARGET_STAGE_ID }}" `
+            -Note "${{ inputs.deploy_note }}"
+
+      - name: Rehydrate target environment schedules
+        shell: pwsh
+        env:
+          # Workspace + item IDs are resolved at runtime from these (not stored in config).
+          FABRIC_DEV_WORKSPACE_ID: ${{ secrets.FABRIC_DEV_WORKSPACE_ID }}
+          FABRIC_TEST_WORKSPACE_ID: ${{ secrets.FABRIC_TEST_WORKSPACE_ID }}
+          FABRIC_PROD_WORKSPACE_ID: ${{ secrets.FABRIC_PROD_WORKSPACE_ID }}
+          FABRIC_DEV_PIPELINE_ITEM_ID: ${{ secrets.FABRIC_DEV_PIPELINE_ITEM_ID }}
+          FABRIC_TEST_PIPELINE_ITEM_ID: ${{ secrets.FABRIC_TEST_PIPELINE_ITEM_ID }}
+          FABRIC_PROD_PIPELINE_ITEM_ID: ${{ secrets.FABRIC_PROD_PIPELINE_ITEM_ID }}
+        run: |
+          ./scripts/Set-FabricItemSchedules.ps1 `
+            -TenantId "${{ secrets.FABRIC_TENANT_ID }}" `
+            -ClientId "${{ secrets.FABRIC_CLIENT_ID }}" `
+            -ClientSecret "${{ secrets.FABRIC_CLIENT_SECRET }}" `
+            -Environment "${{ inputs.target_environment }}" `
+            -ConfigPath "./config/fabric-schedules.json"

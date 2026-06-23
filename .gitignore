@@ -1,0 +1,24 @@
+# Ignore common local and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.code-workspace
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Fabric or workspace-local temp files
+fabric/.cache/
+fabric/.temp/
+
+# Local secrets and runtime artifacts (never commit a real .env)
+.env
+*.log
+*.tmp

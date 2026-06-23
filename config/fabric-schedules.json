@@ -1,0 +1,67 @@
+{
+  "_comment": "GitHub-owned schedule policy and the source of truth for scripts/Set-FabricItemSchedules.ps1, which forcibly resets target-stage schedules after every Fabric Deployment Pipeline promotion. This file is intentionally tenant-agnostic: workspace and item IDs are NOT stored here. They are resolved at runtime from environment variables / GitHub secrets by convention: FABRIC_<ENV>_WORKSPACE_ID and FABRIC_<ENV>_<ITEMKEY>_ITEM_ID (ENV = DEV/TEST/PROD; ITEMKEY defaults to PIPELINE). Time zones use Windows time zone IDs. Max 20 schedules per item.",
+  "environments": {
+    "dev": {
+      "items": [
+        {
+          "name": "POC_Demo_Pipeline",
+          "itemKey": "PIPELINE",
+          "jobType": "Pipeline",
+          "schedules": []
+        }
+      ]
+    },
+    "test": {
+      "items": [
+        {
+          "name": "POC_Demo_Pipeline",
+          "itemKey": "PIPELINE",
+          "jobType": "Pipeline",
+          "schedules": [
+            {
+              "enabled": true,
+              "configuration": {
+                "type": "Daily",
+                "startDateTime": "2026-01-01T00:00:00",
+                "endDateTime": "2099-12-31T23:59:00",
+                "localTimeZoneId": "Mountain Standard Time",
+                "times": [ "03:00" ]
+              },
+              "executionData": {
+                "parameters": {
+                  "Environment": "TEST"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "prod": {
+      "items": [
+        {
+          "name": "POC_Demo_Pipeline",
+          "itemKey": "PIPELINE",
+          "jobType": "Pipeline",
+          "schedules": [
+            {
+              "enabled": true,
+              "configuration": {
+                "type": "Cron",
+                "startDateTime": "2026-01-01T00:00:00",
+                "endDateTime": "2099-12-31T23:59:00",
+                "localTimeZoneId": "Mountain Standard Time",
+                "interval": 60
+              },
+              "executionData": {
+                "parameters": {
+                  "Environment": "PROD"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
